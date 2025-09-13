@@ -20,8 +20,7 @@ export interface SandboxTableProps {
   handleArchive: (id: string) => void
   handleVnc: (id: string) => void
   getWebTerminalUrl: (id: string) => Promise<string | null>
-  handleCreateSshAccess: (id: string) => void
-  handleRevokeSshAccess: (id: string) => void
+  handleSshAccessConfig: (id: string) => void
   onRowClick?: (sandbox: Sandbox) => void
 }
 
@@ -36,8 +35,7 @@ export interface SandboxTableActionsProps {
   onArchive: (id: string) => void
   onVnc: (id: string) => void
   onOpenWebTerminal: (id: string) => void
-  onCreateSshAccess: (id: string) => void
-  onRevokeSshAccess: (id: string) => void
+  onSshAccessConfig: (id: string) => void
 }
 
 export interface SandboxTableHeaderProps {

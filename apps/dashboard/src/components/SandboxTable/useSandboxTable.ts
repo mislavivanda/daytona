@@ -31,8 +31,7 @@ interface UseSandboxTableProps {
   handleArchive: (id: string) => void
   handleVnc: (id: string) => void
   getWebTerminalUrl: (id: string) => Promise<string | null>
-  handleCreateSshAccess: (id: string) => void
-  handleRevokeSshAccess: (id: string) => void
+  handleSshAccessConfig: (id: string) => void
 }
 
 export function useSandboxTable({
@@ -46,8 +45,7 @@ export function useSandboxTable({
   handleArchive,
   handleVnc,
   getWebTerminalUrl,
-  handleCreateSshAccess,
-  handleRevokeSshAccess,
+  handleSshAccessConfig,
 }: UseSandboxTableProps) {
   const [sorting, setSorting] = useState<SortingState>([
     {
@@ -89,8 +87,7 @@ export function useSandboxTable({
         loadingSandboxes,
         writePermitted,
         deletePermitted,
-        handleCreateSshAccess,
-        handleRevokeSshAccess,
+        handleSshAccessConfig,
       }),
     [
       handleStart,
@@ -102,8 +99,7 @@ export function useSandboxTable({
       loadingSandboxes,
       writePermitted,
       deletePermitted,
-      handleCreateSshAccess,
-      handleRevokeSshAccess,
+      handleSshAccessConfig,
     ],
   )
 

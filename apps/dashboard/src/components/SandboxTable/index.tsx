@@ -46,8 +46,7 @@ export function SandboxTable({
   handleArchive,
   handleVnc,
   getWebTerminalUrl,
-  handleCreateSshAccess,
-  handleRevokeSshAccess,
+  handleSshAccessConfig,
   onRowClick,
 }: SandboxTableProps) {
   const navigate = useNavigate()
@@ -67,8 +66,7 @@ export function SandboxTable({
     handleArchive,
     handleVnc,
     getWebTerminalUrl,
-    handleCreateSshAccess,
-    handleRevokeSshAccess,
+    handleSshAccessConfig,
   })
 
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false)
