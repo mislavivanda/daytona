@@ -82,7 +82,9 @@ export function getColumns({
       size: 30,
       header: ({ table }) => (
         <Checkbox
-          checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
+          checked={
+            table.getIsAllPageRowsSelected() ? true : table.getIsSomePageRowsSelected() ? 'indeterminate' : false
+          }
           onCheckedChange={(value) => {
             for (const row of table.getRowModel().rows) {
               if (sandboxIsLoading[row.original.id]) {
