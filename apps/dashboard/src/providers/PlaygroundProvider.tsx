@@ -1,0 +1,265 @@
+/*
+ * Copyright 2025 Daytona Platforms Inc.
+ * SPDX-License-Identifier: AGPL-3.0
+ */
+
+import {
+  PlaygroundContext,
+  SandboxParams,
+  SetSandboxParamsValue,
+  VNCInteractionOptionsParams,
+  SetVNCInteractionOptionsParamValue,
+  RunningActionMethodName,
+  ActionRuntimeError,
+  ValidatePlaygroundActionRequiredParams,
+  RunPlaygroundActionBasic,
+  RunPlaygroundActionWithParams,
+  ValidatePlaygroundActionWithParams,
+  PlaygroundActionParamValueSetter,
+  SetPlaygroundActionParamValue,
+} from '@/contexts/PlaygroundContext'
+import { ScreenshotFormatOption, MouseButton, MouseScrollDirection } from '@/enums/Playground'
+import { Daytona } from '@daytonaio/sdk'
+import { useAuth } from 'react-oidc-context'
+import { useSelectedOrganization } from '@/hooks/useSelectedOrganization'
+import { getLanguageCodeToRun } from '@/lib/playground'
+import { useState, useMemo, useCallback } from 'react'
+
+export const PlaygroundProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [sandboxParametersState, setSandboxParametersState] = useState<SandboxParams>({
+    resources: {
+      cpu: 1,
+      // gpu: 0,
+      memory: 1,
+      disk: 3,
+    },
+    createSandboxBaseParams: {
+      autoStopInterval: 15,
+      autoArchiveInterval: 7,
+      autoDeleteInterval: -1,
+    },
+    listFilesParams: {
+      directoryPath: 'workspace/new-dir',
+    },
+    createFolderParams: {
+      folderDestinationPath: 'workspace/new-dir',
+      permissions: '755',
+    },
+    deleteFileParams: {
+      filePath: 'workspace/new-dir',
+      recursive: true,
+    },
+    gitCloneParams: {
+      repositoryURL: 'https://github.com/octocat/Hello-World.git',
+      cloneDestinationPath: 'workspace/repo',
+    },
+    gitStatusParams: {
+      repositoryPath: 'workspace/repo',
+    },
+    gitBranchesParams: {
+      repositoryPath: 'workspace/repo',
+    },
+    codeRunParams: {
+      languageCode: getLanguageCodeToRun(),
+    },
+    shellCommandRunParams: {
+      shellCommand: 'ls -la', // Current default and fixed value
+    },
+  })
+  const [VNCInteractionOptionsParamsState, setVNCInteractionOptionsParamsState] = useState<VNCInteractionOptionsParams>(
+    {
+      keyboardHotKeyParams: { keys: '' },
+      keyboardPressParams: { key: '' },
+      keyboardTypeParams: { text: '' },
+      mouseClickParams: {
+        x: 100,
+        y: 100,
+        button: MouseButton.LEFT,
+        double: false,
+      },
+      mouseDragParams: {
+        startX: 100,
+        startY: 100,
+        endX: 200,
+        endY: 200,
+        button: MouseButton.LEFT,
+      },
+      mouseMoveParams: {
+        x: 100,
+        y: 100,
+      },
+      mouseScrollParams: {
+        x: 100,
+        y: 100,
+        direction: MouseScrollDirection.DOWN,
+        amount: 1,
+      },
+      screenshotOptionsConfig: {
+        showCursor: false,
+        format: ScreenshotFormatOption.PNG,
+        quality: 100,
+        scale: 1,
+      },
+      screenshotRegionConfig: {
+        x: 100,
+        y: 100,
+        width: 300,
+        height: 200,
+      },
+      VNCUrl: null,
+    },
+  )
+
+  const { user } = useAuth()
+  const { selectedOrganization } = useSelectedOrganization()
+
+  const setSandboxParameterValue: SetSandboxParamsValue = useCallback((key, value) => {
+    setSandboxParametersState((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const setVNCInteractionOptionsParamValue: SetVNCInteractionOptionsParamValue = useCallback((key, value) => {
+    setVNCInteractionOptionsParamsState((prev) => ({ ...prev, [key]: value }))
+  }, [])
+
+  const setPlaygroundActionParamValue: SetPlaygroundActionParamValue = useCallback(
+    (key, value) => {
+      if (key in sandboxParametersState) {
+        setSandboxParameterValue(key as keyof SandboxParams, value as SandboxParams[keyof SandboxParams])
+      } else if (key in VNCInteractionOptionsParamsState) {
+        setVNCInteractionOptionsParamValue(
+          key as keyof VNCInteractionOptionsParams,
+          value as VNCInteractionOptionsParams[keyof VNCInteractionOptionsParams],
+        )
+      } else {
+        console.error(`Unknown parameter key: ${String(key)}`)
+      }
+    },
+    [
+      setSandboxParameterValue,
+      setVNCInteractionOptionsParamValue,
+      sandboxParametersState,
+      VNCInteractionOptionsParamsState,
+    ],
+  )
+
+  const [runningActionMethod, setRunningActionMethod] = useState<RunningActionMethodName>(null)
+  const [actionRuntimeError, setActionRuntimeError] = useState<ActionRuntimeError>({})
+
+  const validatePlaygroundActionRequiredParams: ValidatePlaygroundActionRequiredParams = useCallback(
+    (actionParamsFormData, actionParamsState) => {
+      if (actionParamsFormData.some((formItem) => formItem.required)) {
+        const emptyFormItem = actionParamsFormData
+          .filter((formItem) => formItem.required)
+          .find((formItem) => {
+            const value = actionParamsState[formItem.key]
+            return value === '' || value === undefined
+          })
+
+        if (emptyFormItem) {
+          return `${emptyFormItem.label} parameter is required for this action`
+        }
+      }
+
+      return undefined
+    },
+    [],
+  )
+
+  const runPlaygroundAction: RunPlaygroundActionBasic = useCallback(async (actionFormData, invokeApi) => {
+    setRunningActionMethod(actionFormData.methodName)
+    try {
+      await invokeApi(actionFormData)
+      setRunningActionMethod(null)
+    } catch (error) {
+      console.error('API call error', error)
+    }
+  }, [])
+
+  const runPlaygroundActionWithParams: RunPlaygroundActionWithParams = useCallback(
+    async (actionFormData, invokeApi) => {
+      const validationError = validatePlaygroundActionRequiredParams(
+        actionFormData.parametersFormItems,
+        actionFormData.parametersState,
+      )
+      if (validationError) {
+        setActionRuntimeError((prev) => ({
+          ...prev,
+          [actionFormData.methodName]: validationError,
+        }))
+        setRunningActionMethod(null)
+        return
+      }
+      // Reset error
+      setActionRuntimeError((prev) => ({
+        ...prev,
+        [actionFormData.methodName]: null,
+      }))
+      return await runPlaygroundAction(actionFormData, invokeApi)
+    },
+    [runPlaygroundAction, validatePlaygroundActionRequiredParams],
+  )
+
+  const validatePlaygroundActionWithParams: ValidatePlaygroundActionWithParams = useCallback(
+    (actionFormData, parametersState) => {
+      const validationError = validatePlaygroundActionRequiredParams(
+        actionFormData.parametersFormItems,
+        parametersState,
+      )
+      if (validationError) {
+        setActionRuntimeError((prev) => ({
+          ...prev,
+          [actionFormData.methodName]: validationError,
+        }))
+      } // Reset error
+      else
+        setActionRuntimeError((prev) => ({
+          ...prev,
+          [actionFormData.methodName]: null,
+        }))
+    },
+    [validatePlaygroundActionRequiredParams],
+  )
+
+  const playgroundActionParamValueSetter: PlaygroundActionParamValueSetter = useCallback(
+    (actionFormData, paramFormData, setState, actionParamsKey, value) => {
+      setState((prev) => {
+        const newState = { ...prev, [paramFormData.key]: value }
+        setPlaygroundActionParamValue(actionParamsKey, newState)
+        // Validate action params
+        if (!actionFormData.onChangeParamsValidationDisabled)
+          validatePlaygroundActionWithParams(actionFormData, newState)
+        return newState
+      })
+    },
+    [setPlaygroundActionParamValue, validatePlaygroundActionWithParams],
+  )
+
+  const DaytonaClient = useMemo(() => {
+    if (!user?.access_token) return null
+    return new Daytona({
+      jwtToken: user.access_token,
+      apiUrl: import.meta.env.VITE_API_URL,
+      organizationId: selectedOrganization?.id,
+    })
+  }, [user?.access_token, selectedOrganization?.id])
+
+  return (
+    <PlaygroundContext.Provider
+      value={{
+        sandboxParametersState,
+        setSandboxParameterValue,
+        VNCInteractionOptionsParamsState,
+        setVNCInteractionOptionsParamValue,
+        runPlaygroundActionWithParams,
+        runPlaygroundActionWithoutParams: runPlaygroundAction,
+        validatePlaygroundActionWithParams,
+        playgroundActionParamValueSetter,
+        runningActionMethod,
+        actionRuntimeError,
+        DaytonaClient,
+      }}
+    >
+      {children}
+    </PlaygroundContext.Provider>
+  )
+}
